@@ -1,5 +1,6 @@
 # tingshu_spider
 使用selenium爬取下载有声小说
+需安装chromedriver，selenium，bs4，Crypto，pydub
 
 从悦听吧下载音频文件
 
