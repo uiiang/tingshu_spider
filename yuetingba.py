@@ -210,21 +210,6 @@ class YueTingBa:
     with open(down_path, 'wb') as f:
       f.write(response.content)
 
-  def convert(self, title, filename):
-    # print(f'in convert filename {filename}')
-    (file, ext) = os.path.splitext(filename)
-    ext = ext[1:]
-    mp3_dir = os.path.join(title, "mp3")
-    to_path = os.path.join(mp3_dir,file+".mp3")
-    if not os.path.exists(to_path) and ext != 'mp3':
-      if not os.path.exists(mp3_dir):
-        print(f'创建文件夹 [{mp3_dir}]')
-        os.makedirs(mp3_dir)
-      form_path = os.path.join(title,filename)
-      print(f'将{filename}转换为mp3格式,file=[{file}] 到[{to_path}]')
-      audio = AudioSegment.from_file(form_path, format=ext)
-      audio.export(to_path,format="mp3")
-
   # def download_chapter(self, download_list):
   #   lock = Lock()
   #   dir_path = title
@@ -247,20 +232,37 @@ class YueTingBa:
   #     # convert(down_path_ext,ext)
 
   def download_chapter(self, download_list):
-    dir_path = title
-    count = len(download_list)
     for index, down_info in enumerate(download_list):
-      time.sleep(5)
+      # time.sleep(3)
       chapter_title = down_info["title"] 
       bar = PiecesProgressBar(1,1)
       bar.update()
       # print(f'url == {parse.quote(url, safe=";/?:@&=+$,",encoding="utf-8")}')
       (file, ext) = os.path.splitext(down_info["filePath"])
-      url_save(url=down_info['filePath'],
-          filepath=os.path.join(title,'download', chapter_title+ext),
+      if ext == '.mp3':
+        filepath = os.path.join(title,'mp3', chapter_title+ext)
+      else:
+        filepath = os.path.join(title,'download', chapter_title+ext)
+      url_save(url = down_info['filePath'],
+          filepath = filepath,
           bar=bar, refer=None, merge=True,
           faker=False, headers=self.headers)
       bar.done()
+      # if not ext == '.mp3':
+      #   self.convert(file, ext)
+
+  def convert(self, filename, ext):
+    # print(f'in convert filename {filename}')
+    if ext != '.mp3':
+      print(f'转换{filename + ext}为mp3格式')
+      download_dir = os.path.join(title, 'download')
+      to_path = os.path.join(download_dir, filename + ".mp3")
+
+      form_path = os.path.join(title, filename+ext)
+      print(f'将{filename}转换为mp3格式,file=[{filename}] 到[{to_path}]')
+      audio = AudioSegment.from_file(form_path, format=ext)
+      audio.export(to_path,format="mp3")
+
 
 if __name__ == "__main__":
   ytb = YueTingBa()
@@ -276,6 +278,8 @@ if __name__ == "__main__":
   
   if not os.path.exists(os.path.join(title,'download')):
     os.makedirs(os.path.join(title,'download'))
+  if not os.path.exists(os.path.join(title,'mp3')):
+    os.makedirs(os.path.join(title,'mp3'))
   
   if os.path.exists(os.path.join(title, 'download_list.json')):
     driver.quit()
