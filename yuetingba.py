@@ -233,7 +233,7 @@ class YueTingBa:
 
   def download_chapter(self, download_list):
     for index, down_info in enumerate(download_list):
-      # time.sleep(3)
+      time.sleep(3)
       chapter_title = down_info["title"] 
       bar = PiecesProgressBar(1,1)
       bar.update()
