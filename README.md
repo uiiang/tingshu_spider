@@ -1,6 +1,6 @@
 # tingshu_spider
-使用selenium爬取下载有声小说
-需安装chromedriver，selenium，bs4，Crypto，pydub
+爬取下载有声小说
+需安装bs4，Crypto，pydub
 
 从悦听吧下载音频文件
 
@@ -14,7 +14,7 @@ python .\yuetingba.py
 起始章节数【从1开始，默认第1章】：
 终止章节数【默认不限】
 ```
-确认后会通过selenium打开chrome，从网页上爬取小说章节信息
+确认后从网页上爬取小说章节信息
 ['3a0a961a-7d86-ad0b-a6b6-2eab7d76a244', '000_作者自述']
 根据章节code向服务器请求章节加密信息
 解密后得到章节下载地址

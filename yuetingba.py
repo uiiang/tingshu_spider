@@ -1,10 +1,4 @@
-from selenium.webdriver.common.keys import Keys
 from bs4 import BeautifulSoup
-from selenium.webdriver.common.by import By
-from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.chrome.options import Options
-from selenium import webdriver
-from selenium.webdriver.edge.service import Service
 import time
 from threading import Thread,Lock
 import os
@@ -58,9 +52,9 @@ class YueTingBa:
       print("下载章节数字有误")
       exit()
     
-    cov_to_mp3 = input("是否将文件转换为mp3(1是/0否)：") or 1
+    # cov_to_mp3 = input("是否将文件转换为mp3(1是/0否)：") or 1
 
-    return book_id,start_chapter,end_chapter,int(cov_to_mp3)
+    return book_id,start_chapter,end_chapter #,int(cov_to_mp3)
 
   def get_page_list(self, soup):
     nav_tabs_soup = soup.find(name='ul',attrs={'role':'tablist'})
@@ -72,10 +66,9 @@ class YueTingBa:
       temp_list.append(['http://yuetingba.cn' + data_href,data_title])
     return temp_list
 
-  def get_data_code(self, src):
-    driver.get(src)
+  def get_data_code(self, url):
+    html = self.open_url(url)
     time.sleep(1)
-    html = driver.page_source
     soup = BeautifulSoup(html, "html.parser")
     chapter_content = soup.find(name='div' ,class_='ting-list-content')
     srcs = chapter_content.find_all('a',attrs={"href": True, "title": True,'onclick':True})
@@ -94,28 +87,20 @@ class YueTingBa:
     # print(response.text)
     return response.text
 
-  def get_driver(self):
-    ser = Service()
-    ser.path = 'D:/devtools/python/Python312/chromedriver.exe'
-
-    options = webdriver.ChromeOptions()
-    options.add_argument("window-position=660,0")
-    # options.add_argument('-ignore-certificate-errors')
-    options.add_argument('-ignore -ssl-errors')
-    options.add_argument('--user-agent=%s' % self.user_agent)
-    driver = webdriver.Chrome(options=options,service=ser)
-    return driver
-
-  def open_url(self):
+  def open_url(self, url):
     print("访问悦听吧页面中.....")
-    driver.get("http://yuetingba.cn/book/detail/"+book_id)
+    response = requests.get(url=url,headers=ytb.headers)
+    response.raise_for_status()
+    response.encoding = response.apparent_encoding
+    content = response.text
+    # print(concent)
+    return content
 
-  def get_book_title(self):
-    html = driver.page_source  # 获取当前页面HTML
-    soup = BeautifulSoup(html, "html.parser")
+  def get_book_title(self, content):
+    soup = BeautifulSoup(content, "html.parser")
     title = soup.find('h1', class_='book-detail-title').text
     print(f'检测到书名：{title}')
-    return soup,title
+    return soup, title
 
   # ['3a0a961a-7d86-ad0b-a6b6-2eab7d76a244', '000_作者自述：我创作这本书来源于一个契机']
   def get_chapter_list(self):
@@ -267,11 +252,10 @@ class YueTingBa:
 if __name__ == "__main__":
   ytb = YueTingBa()
   book_id,start_chapter,end_chapter,cov_to_mp3 = ytb.input_info()
-  driver = ytb.get_driver()
   time.sleep(1)
-  ytb.open_url()
+  content = ytb.open_url("http://yuetingba.cn/book/detail/"+book_id)
   time.sleep(1)
-  soup,title = ytb.get_book_title()
+  soup, title = ytb.get_book_title(content)
   if not os.path.exists(title):
     print(f'创建文件夹{title}')
     os.makedirs(title)
@@ -282,7 +266,6 @@ if __name__ == "__main__":
     os.makedirs(os.path.join(title,'mp3'))
   
   if os.path.exists(os.path.join(title, 'download_list.json')):
-    driver.quit()
     print(f'找到了download_list.json')
     download_list_json = ytb.get_download_list_json()
     download_list = ytb.check_not_exists_file(os.path.join(title,'download'),download_list_json)
@@ -293,7 +276,6 @@ if __name__ == "__main__":
   else:
     print(f'开始从网站上抓取章节信息')
     chapter_list = ytb.get_chapter_list()
-    driver.quit()
     if end_chapter > 0:
       temp_list = chapter_list[start_chapter:end_chapter]
     else:
