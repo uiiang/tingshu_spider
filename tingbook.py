@@ -1,3 +1,4 @@
+import re
 from bs4 import BeautifulSoup
 import time
 import os
@@ -8,8 +9,8 @@ import json
 from pydub import AudioSegment
 
 from download import PiecesProgressBar, url_save
-class YueTingBa:
-  base_url = 'http://yuetingba.cn'
+class Tingbook:
+  base_url = 'https://www.tingbook.cc/'
   user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0'
   headers = {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',  # noqa
@@ -55,15 +56,7 @@ class YueTingBa:
 
     return book_id,start_chapter,end_chapter #,int(cov_to_mp3)
 
-  def get_page_list(self, soup):
-    nav_tabs_soup = soup.find(name='ul',attrs={'role':'tablist'})
-    srcs = nav_tabs_soup.find_all('a')
-    temp_list = list()
-    for src in srcs:
-      data_href = src.get('href')
-      data_title = src.text
-      temp_list.append([self.base_url + data_href,data_title])
-    return temp_list
+
 
   def get_data_code(self, url):
     html = self.open_url(url)
@@ -88,6 +81,8 @@ class YueTingBa:
 
   def open_url(self, url):
     print("访问悦听吧页面中.....")
+    ytb.headers['Referer'] = url
+    # print(ytb.headers)
     response = requests.get(url=url,headers=ytb.headers)
     response.raise_for_status()
     response.encoding = response.apparent_encoding
@@ -97,23 +92,23 @@ class YueTingBa:
 
   def get_book_title(self, content):
     soup = BeautifulSoup(content, "html.parser")
-    title = soup.find('h1', class_='book-detail-title').text
+    title = soup.find('h2', class_='tx-title2 f-16 f-bold').text
     print(f'检测到书名：{title}')
     return soup, title
 
   # ['3a0a961a-7d86-ad0b-a6b6-2eab7d76a244', '000_作者自述：我创作这本书来源于一个契机']
   def get_chapter_list(self):
-    nav_tab_list = self.get_page_list(soup)
-    print(f'检测到卡片：{nav_tab_list}')
-
-    chapter_list = list()
-    for tab in nav_tab_list:
-      print(f'开始收集{tab[1]}中的章节代码')
-      temp_list = self.get_data_code(tab[0])
-      chapter_list.extend(temp_list)
-    
-    # print(f'章节代码{chapter_list}')
-    return chapter_list
+    content_soup = soup.find(name='div', attrs={'id':'yuedu'})
+    chapter_soup = content_soup.find(name='ul', class_='ul-36')
+    # print(chapter_soup)
+    srcs = chapter_soup.find_all('a')
+    temp_list = list()
+    for src in srcs:
+      data_href = src.get('href')
+      data_title = src.text
+      temp_list.append([self.base_url + data_href,data_title])
+    # print(f'章节链接{temp_list}')
+    return temp_list
 
   # {"Id":"3a0a961a-7d87-7c0e-1cfb-5cc1d2d67301",
   #   "BookId":"3a0a95d2-f731-d936-0363-fadbc2d27835",
@@ -161,26 +156,24 @@ class YueTingBa:
     with open(os.path.join(title, 'download_list.json'), 'w',encoding='utf-8') as f:
       f.write(b)
       f.close()
+
   def get_download_list(self, chapter_list):
     download_list = list()
+    pattern = re.compile(r"var now=(.*?);", re.MULTILINE | re.DOTALL)
     for cht in chapter_list:
-      # if not check_file_exists(cht[1]):
-      b64 = self.req_ting_serz(cht[0])
-      json_str = self.decode_chapter_json(b64)
-      # print(f'json_str = {json_str}')
-      # {"Id":"3a0a961a-7d87-7c0e-1cfb-5cc1d2d67301",
-      #   "BookId":"3a0a95d2-f731-d936-0363-fadbc2d27835",
-      #   "TingNo":105,
-      #   "FilePath":"http://117.65.18.37:50010/myfiles/host/listen/听书目录/清明上河图密码~冶文彪~读客熊猫君/ef9a3acb94ff455da461767185f24fef.m4a",
-      #   "Title":"103_主动投案",
-      #   "AsName":"pve1_nas_low",
-      #   "PlaysServerUrl":"http://117.65.18.37:52001"}
-      data = json.loads(json_str)
-      filePath = data['FilePath']
-      title = data['Title']
-      print(f'filePath={filePath} , title={title}')
-      download_list.append({'filePath':filePath,'title': title})
       time.sleep(1)
+      print(f'章节地址:{cht[0]}')
+      cht_page = self.open_url(cht[0])
+      cht_content = BeautifulSoup(cht_page, "html.parser")
+      scripts = cht_content.find_all('script')
+      # print(scripts)
+      # print(len(scripts))
+      for sc in scripts:
+        if sc.text.count('var now=')>0:
+          # print(sc)
+          url = pattern.search(sc.prettify()).group(1)
+          # print(url)
+          download_list.append({'url':url.replace('"',''),'title':cht[1]})
     return download_list
 
   def download_book(self, src, dir_path, file_name):
@@ -222,12 +215,12 @@ class YueTingBa:
       bar = PiecesProgressBar(1,1)
       bar.update()
       # print(f'url == {parse.quote(url, safe=";/?:@&=+$,",encoding="utf-8")}')
-      (file, ext) = os.path.splitext(down_info["filePath"])
+      (file, ext) = os.path.splitext(down_info["url"])
       if ext == '.mp3':
         filepath = os.path.join(title,'mp3', chapter_title+ext)
       else:
         filepath = os.path.join(title,'download', chapter_title+ext)
-      url_save(url = down_info['filePath'],
+      url_save(url = down_info['url'],
           filepath = filepath,
           bar=bar, refer=None, merge=True,
           faker=False, headers=self.headers)
@@ -249,10 +242,10 @@ class YueTingBa:
 
 
 if __name__ == "__main__":
-  ytb = YueTingBa()
+  ytb = Tingbook()
   book_id,start_chapter,end_chapter = ytb.input_info()
   time.sleep(1)
-  content = ytb.open_url(f"{ytb.base_url}/book/detail/"+book_id)
+  content = ytb.open_url(f"{ytb.base_url}/show/{book_id}.html")
   time.sleep(1)
   soup, title = ytb.get_book_title(content)
   if not os.path.exists(title):
@@ -264,35 +257,20 @@ if __name__ == "__main__":
   if not os.path.exists(os.path.join(title,'mp3')):
     os.makedirs(os.path.join(title,'mp3'))
   
-  if os.path.exists(os.path.join(title, 'download_list.json')):
-    print(f'找到了download_list.json')
-    download_list_json = ytb.get_download_list_json()
-    download_list = ytb.check_not_exists_file(os.path.join(title,'download'),download_list_json)
-    print(f'download_list中保存{len(download_list_json)}个章节信息，本地缺少{len(download_list)}个文件')
-    # print(download_list)
-    ytb.download_chapter(download_list)
-    print(f'已经完成 {title} [{download_list[0]['title']}] 至 [{download_list[-1]['title']}] 共 {len(download_list)} 个章节的下载')
+  print(f'开始从网站上抓取章节信息')
+  chapter_list = ytb.get_chapter_list()
+  print(chapter_list)
+  if end_chapter > 0:
+    temp_list = chapter_list[start_chapter:end_chapter]
   else:
-    print(f'开始从网站上抓取章节信息')
-    chapter_list = ytb.get_chapter_list()
-    if end_chapter > 0:
-      temp_list = chapter_list[start_chapter:end_chapter]
-    else:
-      temp_list = chapter_list[start_chapter:]
-    print(f'有声读物《{title}》共找到 {len(chapter_list)} 个章节信息')
-    print(f'需下载其中 [{temp_list[0][1]}] 至 [{temp_list[-1][1]}] 共 {len(temp_list)} 个章节')
-    download_list = ytb.get_download_list(temp_list)
-    print(f'有声读物《{title}》共找到 {len(download_list)} 个章节的下载地址')
-    ytb.save_download_list_json(download_list)
-    ytb.download_chapter(download_list)
-    print(f'已经完成 {title} [{temp_list[0][1]}] 至 [{temp_list[-1][1]}] 共 {len(temp_list)} 个章节的下载')
-  # print(f'转换mp3: {cov_to_mp3==1}')
-  # if cov_to_mp3 == 1:
-  #   filenames = os.listdir(os.path.join(title))
-  #   print(filenames)
-  #   for file in filenames:
-  #     file_path = os.path.join(title, file)
-  #     if os.path.isfile(file_path):
-  #       convert(title, file)
+    temp_list = chapter_list[start_chapter:]
+  print(f'有声读物《{title}》共找到 {len(chapter_list)} 个章节信息')
+  print(f'需下载其中 [{temp_list[0][1]}] 至 [{temp_list[-1][1]}] 共 {len(temp_list)} 个章节')
+  download_list = ytb.get_download_list(temp_list)
+  print(f'有声读物《{title}》共找到 {len(download_list)} 个章节的下载地址')
+  # ytb.save_download_list_json(download_list)
+  ytb.download_chapter(download_list)
+  print(f'已经完成 {title} [{temp_list[0][1]}] 至 [{temp_list[-1][1]}] 共 {len(temp_list)} 个章节的下载')
 
-  # 3a0a95d2-f731-d936-0363-fadbc2d27835/0
+
+  # ytb.get_download_list([['https://www.tingbook.cc/jpplay/15227-0-40.html','asdf']])
